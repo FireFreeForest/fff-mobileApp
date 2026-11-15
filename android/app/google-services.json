@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "827233713954",
+    "project_id": "fire-free-forest",
+    "storage_bucket": "fire-free-forest.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:827233713954:android:cd8cc914d0599ad046af7b",
+        "android_client_info": {
+          "package_name": "org.firefreeforest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQf1vLYUhZ5bE7ORHMhcPv3_7q2gfuxKU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
