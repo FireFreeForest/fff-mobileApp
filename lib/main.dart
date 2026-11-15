@@ -16,6 +16,7 @@ import 'data/command_repository.dart';
 import 'data/dashboard_repository.dart';
 import 'data/device_repository.dart';
 import 'data/event_repository.dart';
+import 'data/geocoding_repository.dart';
 import 'data/provisioning_service.dart';
 import 'data/push_repository.dart';
 import 'services/fcm_service.dart';
@@ -44,6 +45,7 @@ Future<void> main() async {
   );
   final pushRepository = PushRepository(apiClient: apiClient);
   final deviceRepository = DeviceRepository(apiClient: apiClient);
+  final geocodingRepository = GeocodingRepository(apiClient: apiClient);
   final commandRepository = CommandRepository(apiClient: apiClient);
   final dashboardRepository = DashboardRepository(apiClient: apiClient);
   final eventRepository = EventRepository(apiClient: apiClient);
@@ -78,6 +80,7 @@ Future<void> main() async {
         Provider<AppSettingsStore>.value(value: settingsStore),
         Provider<AuthRepository>.value(value: authRepository),
         Provider<DeviceRepository>.value(value: deviceRepository),
+        Provider<GeocodingRepository>.value(value: geocodingRepository),
         Provider<CommandRepository>.value(value: commandRepository),
         Provider<DashboardRepository>.value(value: dashboardRepository),
         Provider<EventRepository>.value(value: eventRepository),

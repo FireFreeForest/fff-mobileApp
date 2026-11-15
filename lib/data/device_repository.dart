@@ -38,22 +38,40 @@ class DeviceRepository {
   }
 
   Future<Device> createDevice({
+    String? deviceId,
+    required String name,
+    required String locationName,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await _apiClient.postJson(
+      '/api/v1/devices',
+      body: {
+        if (deviceId != null && deviceId.trim().isNotEmpty)
+          'device_id': deviceId.trim(),
+        'name': name,
+        'location_name': locationName,
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
+    return Device.fromJson(parseMap(response['data']));
+  }
+
+  Future<Device> updateDevice({
     required String deviceId,
     required String name,
     required String locationName,
     required double latitude,
     required double longitude,
-    String firmwareVersion = '',
   }) async {
-    final response = await _apiClient.postJson(
-      '/api/v1/devices',
+    final response = await _apiClient.patchJson(
+      '/api/v1/devices/${Uri.encodeComponent(deviceId)}',
       body: {
-        'device_id': deviceId,
         'name': name,
         'location_name': locationName,
         'latitude': latitude,
         'longitude': longitude,
-        'firmware_version': firmwareVersion,
       },
     );
     return Device.fromJson(parseMap(response['data']));

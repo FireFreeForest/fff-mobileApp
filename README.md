@@ -16,7 +16,7 @@ Aplikasi Android Flutter untuk pemantauan deteksi dini kebakaran hutan. Aplikasi
 - Peta status node dengan filter risiko dan status online/offline.
 - Daftar node, detail telemetri, grafik asap, dan kontrol pompa manual.
 - Analitik risiko, ranking node, dan riwayat event.
-- Provisioning node baru melalui SoftAP perangkat.
+- Provisioning node baru melalui SoftAP: ID dibuat backend, nama lokasi diisi otomatis dari peta.
 - Update realtime melalui WebSocket.
 - Push notification FCM dan notifikasi lokal dengan channel/suara per jenis event.
 - Pengaturan server backend saat mode debug; server produksi di-bake saat build release.
@@ -52,6 +52,17 @@ Konfigurasi build-time lain:
 | `ALLOW_SERVER_SWITCH` | `true` di debug, `false` di release | Menampilkan menu ganti server backend |
 
 Di debug, server bisa diganti dari layar login atau pengaturan. Di release, nilai `ALLOW_SERVER_SWITCH` default `false`, sehingga URL hasil build dipakai langsung dan menu ganti server disembunyikan.
+
+## Alur Tambah Node
+
+1. Sambungkan ponsel ke WiFi `FFF-Setup`, lalu tekan **Cek node**.
+2. Isi nama lokasi dan pilih titik node di peta. Jika nama lokasi masih kosong, aplikasi meminta label alamat ke backend (`GET /api/v1/geocode/reverse`). Hasil autofill tetap bisa diedit; jika geocode gagal, isi manual.
+3. Saat disimpan, aplikasi membuat device lewat backend **tanpa mengirim `device_id`**. Backend mengembalikan ID baru berformat `FFF-XXXXXXXX`.
+4. Aplikasi mengirim ID dari respons backend tersebut ke ESP8266 lewat endpoint SoftAP `/provision`.
+
+Jika provisioning gagal setelah device berhasil dibuat, identitas node sudah tersimpan. Percobaan berikutnya memakai ID yang sama dan memperbarui nama/lokasi lewat `PATCH /api/v1/devices/:deviceID`, jadi tidak membuat node ganda.
+
+Versi firmware tidak diisi atau dikirim dari aplikasi mobile. Rencana Phase 2: firmware mengirim versi lewat topik MQTT `fire-free-forest/{device_id}/info`, lalu backend meneruskannya ke aplikasi.
 
 ## Build Release
 

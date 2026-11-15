@@ -8,9 +8,11 @@ import 'package:firefreeforest/data/command_repository.dart';
 import 'package:firefreeforest/data/dashboard_repository.dart';
 import 'package:firefreeforest/data/device_repository.dart';
 import 'package:firefreeforest/data/event_repository.dart';
+import 'package:firefreeforest/data/geocoding_repository.dart';
 import 'package:firefreeforest/data/provisioning_service.dart';
 import 'package:firefreeforest/features/analytics/analytics_screen.dart';
 import 'package:firefreeforest/features/auth/login_screen.dart';
+import 'package:firefreeforest/features/nodes/add_node_screen.dart';
 import 'package:firefreeforest/features/history/history_screen.dart';
 import 'package:firefreeforest/features/nodes/node_detail_screen.dart';
 import 'package:firefreeforest/features/nodes/nodes_screen.dart';
@@ -37,9 +39,13 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 
 class FakeAuthController extends ChangeNotifier implements AuthController {
-  FakeAuthController({this.canOperateValue = false});
+  FakeAuthController({
+    this.canOperateValue = false,
+    this.canManageDevicesValue = false,
+  });
 
   final bool canOperateValue;
+  final bool canManageDevicesValue;
   String? _errorMessage;
 
   @override
@@ -64,7 +70,7 @@ class FakeAuthController extends ChangeNotifier implements AuthController {
   bool get canResolve => false;
 
   @override
-  bool get canManageDevices => false;
+  bool get canManageDevices => canManageDevicesValue;
 
   @override
   Future<void> bootstrap() async {}
@@ -93,6 +99,12 @@ class FakeAuthController extends ChangeNotifier implements AuthController {
 }
 
 class MockDeviceRepository extends Mock implements DeviceRepository {}
+
+class MockGeocodingRepository extends Mock implements GeocodingRepository {}
+
+class MockProvisioningService extends Mock implements ProvisioningService {}
+
+class MockSecureTokenStore extends Mock implements SecureTokenStore {}
 
 class MockCommandRepository extends Mock implements CommandRepository {}
 
@@ -805,6 +817,92 @@ void main() {
 
     verify(() => eventRepo.acknowledge('event-1')).called(1);
     expect(find.text('Status kejadian diperbarui.'), findsOneWidget);
+  });
+
+  testWidgets('add node relies on the server-generated device ID', (
+    tester,
+  ) async {
+    final auth = FakeAuthController(canManageDevicesValue: true);
+    final realtime = FakeRealtimeService();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthController>.value(value: auth),
+          Provider<DeviceRepository>.value(value: MockDeviceRepository()),
+          Provider<GeocodingRepository>.value(value: MockGeocodingRepository()),
+          Provider<ProvisioningService>.value(value: MockProvisioningService()),
+          Provider<RealtimeService>.value(value: realtime),
+        ],
+        child: const MaterialApp(home: AddNodeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('ID perangkat'), findsNothing);
+    expect(find.textContaining('dibuat otomatis oleh server'), findsOneWidget);
+  });
+
+  test('device repository lets the backend assign the device ID', () async {
+    final tokenStore = MockSecureTokenStore();
+    when(() => tokenStore.readAccessToken()).thenAnswer((_) async => 'token');
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        '{"data":{"id":"uuid-1","device_id":"FFF-ABCDEFGH",'
+        '"name":"Pos Sebangau","location_name":"Pos Sebangau",'
+        '"status":"offline","firmware_version":""}}',
+        201,
+      );
+    });
+    final apiClient = ApiClient(
+      baseUrl: 'http://localhost:8080',
+      tokenStore: tokenStore,
+      httpClient: client,
+    );
+    final repository = DeviceRepository(apiClient: apiClient);
+
+    final device = await repository.createDevice(
+      name: 'Pos Sebangau',
+      locationName: 'Pos Sebangau',
+      latitude: -2.2,
+      longitude: 113.9,
+    );
+
+    expect(device.deviceId, 'FFF-ABCDEFGH');
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/api/v1/devices');
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    expect(body.containsKey('device_id'), isFalse);
+    expect(body.containsKey('firmware_version'), isFalse);
+    expect(body['location_name'], 'Pos Sebangau');
+  });
+
+  test('geocoding repository returns the backend label', () async {
+    final tokenStore = MockSecureTokenStore();
+    when(() => tokenStore.readAccessToken()).thenAnswer((_) async => 'token');
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response('{"data":{"label":"Sebangau, Palangka Raya"}}', 200);
+    });
+    final apiClient = ApiClient(
+      baseUrl: 'http://localhost:8080',
+      tokenStore: tokenStore,
+      httpClient: client,
+    );
+    final repository = GeocodingRepository(apiClient: apiClient);
+
+    final label = await repository.reverseLabel(
+      latitude: -2.2,
+      longitude: 113.9,
+    );
+
+    expect(label, 'Sebangau, Palangka Raya');
+    expect(captured.url.path, '/api/v1/geocode/reverse');
+    expect(captured.url.queryParameters['lat'], '-2.200000');
+    expect(captured.url.queryParameters['lon'], '113.900000');
   });
 
   test('provisioning service sends SoftAP payload', () async {

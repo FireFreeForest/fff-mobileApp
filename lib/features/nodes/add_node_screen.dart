@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -8,7 +7,9 @@ import '../../core/network/api_exception.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../data/device_repository.dart';
+import '../../data/geocoding_repository.dart';
 import '../../data/provisioning_service.dart';
+import '../../models/device.dart';
 import '../../state/auth_controller.dart';
 import 'location_picker_screen.dart';
 
@@ -21,23 +22,40 @@ class AddNodeScreen extends StatefulWidget {
 
 class _AddNodeScreenState extends State<AddNodeScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _deviceIdController = TextEditingController();
   final _locationNameController = TextEditingController();
   final _ssidController = TextEditingController();
   final _passwordController = TextEditingController();
 
   LatLng? _location;
+  Device? _createdDevice;
   bool _obscurePassword = true;
   bool _checking = false;
   bool _connected = false;
   bool _submitting = false;
+  bool _geocoding = false;
+  bool _geocodeFailed = false;
+  bool _locationNameAutoFilled = false;
+  bool _updatingLocationName = false;
+  int _geocodeRequest = 0;
   String? _connectionMessage;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _locationNameController.addListener(_onLocationNameChanged);
+  }
+
+  void _onLocationNameChanged() {
+    if (_updatingLocationName || !_locationNameAutoFilled) return;
+    setState(() => _locationNameAutoFilled = false);
+  }
+
+  @override
   void dispose() {
-    _deviceIdController.dispose();
-    _locationNameController.dispose();
+    _locationNameController
+      ..removeListener(_onLocationNameChanged)
+      ..dispose();
     _ssidController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -87,6 +105,50 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
     if (result == null || !mounted) return;
     setState(() => _location = result);
     field.didChange(result);
+    await _fillLocationName(result);
+  }
+
+  Future<void> _fillLocationName(LatLng location) async {
+    final current = _locationNameController.text.trim();
+    if (current.isNotEmpty && !_locationNameAutoFilled) return;
+
+    final request = ++_geocodeRequest;
+    setState(() {
+      _geocoding = true;
+      _geocodeFailed = false;
+    });
+
+    try {
+      final label = await context.read<GeocodingRepository>().reverseLabel(
+        latitude: location.latitude,
+        longitude: location.longitude,
+      );
+      if (!mounted || request != _geocodeRequest) return;
+      final canReplace =
+          _locationNameController.text.trim().isEmpty ||
+          _locationNameAutoFilled;
+      if (label == null) {
+        setState(() => _geocodeFailed = true);
+        return;
+      }
+      if (!canReplace) return;
+
+      _updatingLocationName = true;
+      _locationNameController.text = label;
+      _locationNameController.selection = TextSelection.collapsed(
+        offset: label.length,
+      );
+      _updatingLocationName = false;
+      setState(() => _locationNameAutoFilled = true);
+      _formKey.currentState?.validate();
+    } catch (_) {
+      if (!mounted || request != _geocodeRequest) return;
+      setState(() => _geocodeFailed = true);
+    } finally {
+      if (mounted && request == _geocodeRequest) {
+        setState(() => _geocoding = false);
+      }
+    }
   }
 
   Future<void> _submit() async {
@@ -100,25 +162,33 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
     });
 
     var identityReady = false;
-    final deviceId = _deviceIdController.text.trim();
     final locationName = _locationNameController.text.trim();
     final location = _location!;
     final deviceRepository = context.read<DeviceRepository>();
     final provisioningService = context.read<ProvisioningService>();
 
     try {
-      try {
-        await deviceRepository.createDevice(
-          deviceId: deviceId,
+      var device = _createdDevice;
+      if (device == null) {
+        device = await deviceRepository.createDevice(
           name: locationName,
           locationName: locationName,
           latitude: location.latitude,
           longitude: location.longitude,
         );
-      } on ApiException catch (error) {
-        if (!error.isConflict) rethrow;
+        _createdDevice = device;
+      } else {
+        device = await deviceRepository.updateDevice(
+          deviceId: device.deviceId,
+          name: locationName,
+          locationName: locationName,
+          latitude: location.latitude,
+          longitude: location.longitude,
+        );
+        _createdDevice = device;
       }
       identityReady = true;
+      final deviceId = device.deviceId;
 
       await provisioningService.provision(
         ssid: _ssidController.text.trim(),
@@ -143,8 +213,8 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
             ),
             title: const Text('Node siap disambungkan'),
             content: Text(
-              '$deviceId akan berpindah ke WiFi lokasi. Node muncul di daftar '
-              'setelah mengirim data pertama, biasanya dalam 60 detik.',
+              '$deviceId akan berpindah ke WiFi lokasi. Node muncul '
+              'di daftar setelah mengirim data pertama, biasanya dalam 60 detik.',
             ),
             actions: [
               FilledButton(
@@ -235,42 +305,59 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                   const SizedBox(height: AppSpacing.xl),
                   const _SectionTitle(title: 'IDENTITAS NODE'),
                   const SizedBox(height: AppSpacing.sm),
-                  _FieldLabel(
-                    label: 'ID perangkat',
-                    helper: 'Gunakan ID pada stiker perangkat ESP8266.',
-                    child: TextFormField(
-                      controller: _deviceIdController,
-                      textCapitalization: TextCapitalization.characters,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[A-Za-z0-9._-]'),
-                        ),
-                        LengthLimitingTextInputFormatter(64),
-                      ],
-                      decoration: const InputDecoration(
-                        hintText: 'Contoh: ESP-XXXXXX',
-                        prefixIcon: Icon(Icons.qr_code_scanner_rounded),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.18),
                       ),
-                      validator: (value) {
-                        final text = value?.trim() ?? '';
-                        if (text.isEmpty) return 'ID perangkat wajib diisi.';
-                        if (!RegExp(r'^[A-Za-z0-9._-]{3,64}$').hasMatch(text)) {
-                          return 'Gunakan 3–64 huruf, angka, titik, garis bawah, atau strip.';
-                        }
-                        return null;
-                      },
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_outlined,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'ID perangkat dibuat otomatis oleh server saat node '
+                            'disimpan. Tidak perlu mengetik ID dari stiker.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _FieldLabel(
                     label: 'Nama lokasi',
-                    helper: 'Nama ini tampil pada daftar dan peta node.',
+                    helper: _geocoding
+                        ? 'Mengisi nama lokasi dari peta…'
+                        : _geocodeFailed
+                        ? 'Nama lokasi tidak ditemukan; isi manual.'
+                        : 'Diisi otomatis dari peta; bisa diubah.',
                     child: TextFormField(
                       controller: _locationNameController,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Contoh: Pos pantau Sebangau',
-                        prefixIcon: Icon(Icons.place_outlined),
+                        prefixIcon: const Icon(Icons.place_outlined),
+                        suffixIcon: _geocoding
+                            ? const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                       validator: (value) {
                         if ((value?.trim() ?? '').isEmpty) {
