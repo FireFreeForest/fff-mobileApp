@@ -63,6 +63,8 @@ class DeviceStatus {
     required this.connection,
     required this.riskLevel,
     this.lastSeenAt,
+    this.onlineSince,
+    this.uptimeSeconds = 0,
     this.environment,
     this.fire,
     this.serverTime,
@@ -72,6 +74,8 @@ class DeviceStatus {
   final DeviceConnection connection;
   final RiskLevel riskLevel;
   final DateTime? lastSeenAt;
+  final DateTime? onlineSince;
+  final int uptimeSeconds;
   final TelemetryEnvironment? environment;
   final TelemetryFire? fire;
   final DateTime? serverTime;
@@ -91,6 +95,8 @@ class DeviceStatus {
     DeviceConnection? connection,
     RiskLevel? riskLevel,
     DateTime? lastSeenAt,
+    DateTime? onlineSince,
+    int? uptimeSeconds,
     TelemetryEnvironment? environment,
     TelemetryFire? fire,
     DateTime? serverTime,
@@ -100,6 +106,8 @@ class DeviceStatus {
       connection: connection ?? this.connection,
       riskLevel: riskLevel ?? this.riskLevel,
       lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      onlineSince: onlineSince ?? this.onlineSince,
+      uptimeSeconds: uptimeSeconds ?? this.uptimeSeconds,
       environment: environment ?? this.environment,
       fire: fire ?? this.fire,
       serverTime: serverTime ?? this.serverTime,
@@ -118,6 +126,8 @@ class DeviceStatus {
       ),
       riskLevel: RiskLevel.fromApi(json['risk_level']),
       lastSeenAt: parseDateTime(json['last_seen_at']),
+      onlineSince: parseDateTime(json['online_since']),
+      uptimeSeconds: parseInt(json['uptime_seconds']) ?? 0,
       environment: environmentJson is Map
           ? TelemetryEnvironment.fromJson(parseMap(environmentJson))
           : null,

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config/app_config.dart';
@@ -11,17 +13,25 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/risk_style.dart';
 import '../../core/utils/date_format_utils.dart';
 import '../../data/device_repository.dart';
+import '../../data/event_repository.dart';
+import '../../data/geocoding_repository.dart';
 import '../../models/device.dart';
 import '../../models/device_status.dart';
+import '../../models/event.dart';
 import '../../models/realtime_event.dart';
 import '../../models/telemetry.dart';
 import '../../services/realtime_service.dart';
 import '../../services/realtime_updater.dart';
+import '../../shared/widgets/app_header.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/smoke_chart.dart';
+import '../../shared/widgets/aggregate_chart.dart';
 import '../../shared/widgets/surface_card.dart';
 import '../../state/auth_controller.dart';
 import 'widgets/pump_control_card.dart';
+import 'location_picker_screen.dart';
+
+enum _TrendRange { oneHour, sixHours, oneDay, sevenDays, custom }
 
 class NodeDetailScreen extends StatefulWidget {
   const NodeDetailScreen({super.key, required this.deviceId});
@@ -38,6 +48,12 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
   _DetailData? _data;
   bool _loading = true;
   String? _error;
+  _TrendRange _trendRange = _TrendRange.oneDay;
+  DateTimeRange? _customRange;
+  bool _aggregateLoading = false;
+  Map<String, dynamic>? _environmentAggregate;
+  Map<String, dynamic>? _fireAggregate;
+  List<Event> _recentEvents = const [];
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
 
   @override
@@ -68,6 +84,11 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
 
     if (event.type == RealtimeTypes.commandAck ||
         event.type == RealtimeTypes.commandTimeout) {
+      unawaited(_load(showSpinner: false));
+      return;
+    }
+
+    if (event.isEvent) {
       unawaited(_load(showSpinner: false));
       return;
     }
@@ -125,6 +146,19 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
     try {
       final repository = context.read<DeviceRepository>();
       final status = await repository.getStatus(widget.deviceId);
+      var mergedStatus = status;
+      try {
+        final latest = await repository.getLatest(widget.deviceId);
+        mergedStatus = latest.copyWith(
+          device: status.device,
+          connection: status.connection,
+          lastSeenAt: status.lastSeenAt,
+          onlineSince: status.onlineSince,
+          uptimeSeconds: status.uptimeSeconds,
+        );
+      } catch (_) {
+        mergedStatus = status;
+      }
 
       var fireHistory = <TelemetryFire>[];
       try {
@@ -137,14 +171,27 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
         fireHistory = [];
       }
 
+      var recentEvents = <Event>[];
+      try {
+        final events = await context.read<EventRepository>().listEvents(
+          deviceId: widget.deviceId,
+          perPage: 5,
+        );
+        recentEvents = events.items;
+      } catch (_) {
+        recentEvents = [];
+      }
+
       fireHistory.sort((a, b) => _readingTime(a).compareTo(_readingTime(b)));
 
       if (!mounted) return;
       setState(() {
-        _data = _DetailData(status: status, fireHistory: fireHistory);
+        _data = _DetailData(status: mergedStatus, fireHistory: fireHistory);
+        _recentEvents = recentEvents;
         _loading = false;
         _error = null;
       });
+      await _loadAggregates(showSpinner: false);
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -166,13 +213,272 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
         DateTime.fromMillisecondsSinceEpoch(0);
   }
 
+  Future<void> _selectTrendRange(_TrendRange range) async {
+    if (range == _TrendRange.custom) {
+      final now = DateTime.now();
+      final picked = await showDateRangePicker(
+        context: context,
+        firstDate: now.subtract(const Duration(days: 90)),
+        lastDate: now,
+        initialDateRange:
+            _customRange ??
+            DateTimeRange(
+              start: now.subtract(const Duration(days: 1)),
+              end: now,
+            ),
+        helpText: 'Rentang data node',
+        saveText: 'Terapkan',
+      );
+      if (picked == null || !mounted) return;
+      if (picked.duration > const Duration(days: 30)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rentang kustom maksimal 30 hari.')),
+        );
+        return;
+      }
+      setState(() {
+        _trendRange = range;
+        _customRange = picked;
+      });
+    } else {
+      setState(() => _trendRange = range);
+    }
+    await _loadAggregates();
+  }
+
+  Future<void> _loadAggregates({bool showSpinner = true}) async {
+    if (!mounted) return;
+    if (showSpinner) {
+      setState(() => _aggregateLoading = true);
+    } else {
+      setState(() => _aggregateLoading = true);
+    }
+    try {
+      final now = DateTime.now();
+      final range = _customRange;
+      final from = switch (_trendRange) {
+        _TrendRange.oneHour => now.subtract(const Duration(hours: 1)),
+        _TrendRange.sixHours => now.subtract(const Duration(hours: 6)),
+        _TrendRange.oneDay => now.subtract(const Duration(hours: 24)),
+        _TrendRange.sevenDays => now.subtract(const Duration(days: 7)),
+        _TrendRange.custom =>
+          range?.start ?? now.subtract(const Duration(hours: 24)),
+      };
+      final to = _trendRange == _TrendRange.custom ? (range?.end ?? now) : now;
+      final spanMinutes = to.difference(from).inMinutes;
+      final interval = switch (_trendRange) {
+        _TrendRange.oneHour => 0,
+        _TrendRange.sixHours => 5,
+        _TrendRange.oneDay => 15,
+        _TrendRange.sevenDays => 60,
+        _TrendRange.custom =>
+          spanMinutes <= 60
+              ? 0
+              : spanMinutes <= 360
+              ? 5
+              : spanMinutes <= 1440
+              ? 15
+              : 60,
+      };
+      final repository = context.read<DeviceRepository>();
+      final results = await Future.wait([
+        repository.aggregateEnvironment(
+          widget.deviceId,
+          from: from,
+          to: to,
+          interval: interval,
+        ),
+        repository.aggregateFire(
+          widget.deviceId,
+          from: from,
+          to: to,
+          interval: interval,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _environmentAggregate = results[0];
+        _fireAggregate = results[1];
+        _aggregateLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _aggregateLoading = false);
+    }
+  }
+
+  Future<void> _editNode(BuildContext context) async {
+    final status = _data?.status;
+    if (status == null) return;
+    final nameController = TextEditingController(text: status.device.name);
+    final locationController = TextEditingController(
+      text: status.device.locationName,
+    );
+    LatLng? location = status.device.hasLocation
+        ? LatLng(status.device.latitude!, status.device.longitude!)
+        : null;
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                          decoration: BoxDecoration(
+                            color: context.appBorder,
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusPill,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Ubah node',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nama node',
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nama lokasi',
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final picked = await Navigator.of(context)
+                              .push<LatLng>(
+                                MaterialPageRoute(
+                                  builder: (_) => LocationPickerScreen(
+                                    initialLocation: location,
+                                  ),
+                                ),
+                              );
+                          if (picked == null) return;
+                          setSheetState(() => location = picked);
+                          try {
+                            final label = await context
+                                .read<GeocodingRepository>()
+                                .reverseLabel(
+                                  latitude: picked.latitude,
+                                  longitude: picked.longitude,
+                                );
+                            if (label != null) {
+                              setSheetState(
+                                () => locationController.text = label,
+                              );
+                            }
+                          } catch (_) {}
+                        },
+                        icon: const Icon(Icons.map_outlined),
+                        label: Text(
+                          location == null
+                              ? 'Pilih lokasi di peta'
+                              : '${location!.latitude.toStringAsFixed(5)}, ${location!.longitude.toStringAsFixed(5)}',
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      FilledButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(true),
+                        child: const Text('Simpan perubahan'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (result != true || !mounted) return;
+
+    try {
+      await context.read<DeviceRepository>().updateDevice(
+        deviceId: widget.deviceId,
+        name: nameController.text.trim(),
+        locationName: locationController.text.trim(),
+        latitude: location?.latitude ?? status.device.latitude ?? 0,
+        longitude: location?.longitude ?? status.device.longitude ?? 0,
+      );
+      nameController.dispose();
+      locationController.dispose();
+      await _load(showSpinner: false);
+    } on ApiException catch (error) {
+      nameController.dispose();
+      locationController.dispose();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus node?'),
+        content: Text(
+          'Node ${widget.deviceId} dan seluruh data perangkatnya akan dihapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await context.read<DeviceRepository>().deleteDevice(widget.deviceId);
+      if (!mounted) return;
+      context.go('/nodes');
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
     final auth = context.watch<AuthController>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -180,6 +486,10 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
             _DetailHeader(
               device: data?.status.device,
               fallbackDeviceId: widget.deviceId,
+              canDelete: auth.canManageDevices,
+              canEdit: auth.canManageDevices,
+              onEdit: () => _editNode(context),
+              onDelete: () => _confirmDelete(context),
               onBack: () {
                 if (context.canPop()) {
                   context.pop();
@@ -274,7 +584,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   valueCaption: 'Sensor api',
                   valueColor: fire?.flameDetected == true
                       ? AppColors.danger
-                      : AppColors.textPrimary,
+                      : context.appTextPrimary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -283,7 +593,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   caption: 'Nilai analog sensor api',
                   value: flameLevel == null ? '--' : '$flameLevel',
                   valueCaption: 'ADC',
-                  valueColor: AppColors.textPrimary,
+                  valueColor: context.appTextPrimary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -294,7 +604,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   valueCaption: 'MQ2 · ADC',
                   valueColor: smokeCritical
                       ? AppColors.danger
-                      : AppColors.textPrimary,
+                      : context.appTextPrimary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -307,7 +617,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   valueCaption: 'DHT11',
                   valueColor: temperatureHigh
                       ? AppColors.warning
-                      : AppColors.textPrimary,
+                      : context.appTextPrimary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -320,7 +630,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   valueCaption: 'DHT11',
                   valueColor: humidity != null && humidity < 35
                       ? AppColors.warning
-                      : AppColors.textPrimary,
+                      : context.appTextPrimary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -329,7 +639,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   caption: 'Nilai mentah sensor tanah',
                   value: soil == null ? '--' : soil.toStringAsFixed(0),
                   valueCaption: 'Sensor tanah · ADC',
-                  valueColor: AppColors.textPrimary,
+                  valueColor: context.appTextPrimary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -344,7 +654,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   valueCaption: 'Pompa',
                   valueColor: fire?.pump == true
                       ? AppColors.primary
-                      : AppColors.textSecondary,
+                      : context.appTextSecondary,
                 ),
                 const Divider(),
                 _SensorRow(
@@ -359,7 +669,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   valueCaption: 'Buzzer',
                   valueColor: fire?.buzzer == true
                       ? AppColors.warning
-                      : AppColors.textSecondary,
+                      : context.appTextSecondary,
                 ),
               ],
             ),
@@ -385,7 +695,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                         fontWeight: FontWeight.w300,
                         color: smokeCritical
                             ? AppColors.danger
-                            : AppColors.textPrimary,
+                            : context.appTextPrimary,
                       ),
                     ),
                   ],
@@ -404,7 +714,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                   'Ambang bahaya ≥ ${AppConfig.smokeThresholdAdc} ADC · '
                   'Nilai mentah sensor asap · Waktu WIB',
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                      ?.copyWith(fontSize: 10, color: context.appTextMuted),
                 ),
               ],
             ),
@@ -419,6 +729,105 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
             canOperate: canOperate,
             onCommandSettled: () => _load(showSpinner: false),
           ),
+          const SizedBox(height: AppSpacing.xl),
+          const _SectionHeader(title: 'GRAFIK SENSOR AGREGAT'),
+          const SizedBox(height: AppSpacing.sm),
+          SurfaceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    for (final range in const {
+                      _TrendRange.oneHour: '1J',
+                      _TrendRange.sixHours: '6J',
+                      _TrendRange.oneDay: '24J',
+                      _TrendRange.sevenDays: '7H',
+                    }.entries)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            right: range.key == _TrendRange.sevenDays
+                                ? 0
+                                : AppSpacing.xs,
+                          ),
+                          child: ChoiceChip(
+                            label: Center(child: Text(range.value)),
+                            selected: _trendRange == range.key,
+                            showCheckmark: false,
+                            selectedColor: AppColors.primary.withValues(
+                              alpha: 0.16,
+                            ),
+                            side: BorderSide(
+                              color: _trendRange == range.key
+                                  ? AppColors.primary
+                                  : context.appBorder,
+                            ),
+                            labelStyle: TextStyle(
+                              fontSize: 11,
+                              fontWeight: _trendRange == range.key
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: _trendRange == range.key
+                                  ? AppColors.primaryDark
+                                  : context.appTextSecondary,
+                            ),
+                            onSelected: (selected) {
+                              if (!selected) return;
+                              _selectTrendRange(range.key);
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _selectTrendRange(_TrendRange.custom),
+                    icon: const Icon(Icons.calendar_month_outlined, size: 17),
+                    label: Text(
+                      _trendRange == _TrendRange.custom && _customRange != null
+                          ? '${formatWibDate(_customRange!.start)} - ${formatWibDate(_customRange!.end)}'
+                          : 'Rentang kustom',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (_aggregateLoading)
+                  const SizedBox(
+                    height: 180,
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else
+                  Column(
+                    children: [
+                      AggregateChart(
+                        environment: _environmentAggregate,
+                        fire: null,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      const Divider(),
+                      const SizedBox(height: AppSpacing.sm),
+                      AggregateChart(environment: null, fire: _fireAggregate),
+                      const SizedBox(height: AppSpacing.lg),
+                      _PumpAggregateSummary(data: _fireAggregate),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          const _SectionHeader(title: 'LOKASI NODE'),
+          const SizedBox(height: AppSpacing.sm),
+          _LocationCard(device: status.device),
+          const SizedBox(height: AppSpacing.xl),
+          const _SectionHeader(title: 'AKTIVITAS TERBARU'),
+          const SizedBox(height: AppSpacing.sm),
+          _RecentActivityCard(events: _recentEvents),
           const SizedBox(height: AppSpacing.xl),
           const _SectionHeader(title: 'INFORMASI NODE'),
           const SizedBox(height: AppSpacing.sm),
@@ -457,6 +866,203 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
   }
 }
 
+class _LocationCard extends StatelessWidget {
+  const _LocationCard({required this.device});
+
+  final Device device;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!device.hasLocation) {
+      return const SurfaceCard(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Center(child: Text('Lokasi belum diatur')),
+        ),
+      );
+    }
+
+    final point = LatLng(device.latitude!, device.longitude!);
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: SizedBox(
+          height: 220,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: point,
+                    initialZoom: 12,
+                    minZoom: 4,
+                    maxZoom: 18,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.firefreeforest',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: point,
+                          width: 44,
+                          height: 44,
+                          alignment: Alignment.topCenter,
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            size: 42,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: AppSpacing.sm,
+                right: AppSpacing.sm,
+                bottom: AppSpacing.sm,
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: context.appSurface.withValues(alpha: 0.94),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Text(
+                    device.locationLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.events});
+
+  final List<Event> events;
+
+  @override
+  Widget build(BuildContext context) {
+    if (events.isEmpty) {
+      return const SurfaceCard(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Center(child: Text('Belum ada aktivitas.')),
+        ),
+      );
+    }
+
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var i = 0; i < events.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            ListTile(
+              leading: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.warningSoft,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: const Icon(
+                  Icons.notifications_outlined,
+                  size: 18,
+                  color: AppColors.warning,
+                ),
+              ),
+              title: Text(
+                events[i].typeLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${events[i].status.label} · ${relativeTime(events[i].triggeredAt ?? events[i].createdAt)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PumpAggregateSummary extends StatelessWidget {
+  const _PumpAggregateSummary({required this.data});
+
+  final Map<String, dynamic>? data;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = data?['points'];
+    final points = raw is List
+        ? raw.whereType<Map>().map(Map<String, dynamic>.from).toList()
+        : const <Map<String, dynamic>>[];
+    final ratios = points
+        .map((point) => (point['pump_on_ratio'] as num?)?.toDouble())
+        .whereType<double>()
+        .toList();
+    final average = ratios.isEmpty
+        ? null
+        : ratios.reduce((a, b) => a + b) / ratios.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.infoSoft,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.water_outlined, color: AppColors.primaryDark),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'POMPA AIR',
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(letterSpacing: 1, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  average == null
+                      ? 'Belum ada data ON'
+                      : '${(average * 100).toStringAsFixed(0)}% rata-rata ON',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DetailData {
   const _DetailData({required this.status, required this.fireHistory});
 
@@ -469,11 +1075,19 @@ class _DetailHeader extends StatelessWidget {
     required this.device,
     required this.fallbackDeviceId,
     required this.onBack,
+    required this.canDelete,
+    required this.canEdit,
+    required this.onDelete,
+    required this.onEdit,
   });
 
   final Device? device;
   final String fallbackDeviceId;
   final VoidCallback onBack;
+  final bool canDelete;
+  final bool canEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -515,15 +1129,67 @@ class _DetailHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: AppColors.textMuted),
+                      ?.copyWith(color: context.appTextMuted),
                 ),
               ],
             ),
           ),
+          const ThemeQuickToggle(),
+          if (canEdit || canDelete)
+            PopupMenuButton<String>(
+              tooltip: 'Aksi node',
+              onSelected: (value) {
+                if (value == 'edit') onEdit();
+                if (value == 'delete') onDelete();
+              },
+              itemBuilder: (context) => [
+                if (canEdit)
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Ubah node'),
+                      ],
+                    ),
+                  ),
+                if (canDelete)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: AppColors.danger,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Hapus node',
+                          style: TextStyle(color: AppColors.danger),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );
   }
+}
+
+String _formatUptime(int seconds) {
+  if (seconds <= 0) return '0 menit';
+  final duration = Duration(seconds: seconds);
+  if (duration.inDays > 0) {
+    return '${duration.inDays} hari ${duration.inHours % 24} jam';
+  }
+  if (duration.inHours > 0) {
+    return '${duration.inHours} jam ${duration.inMinutes % 60} menit';
+  }
+  return '${duration.inMinutes} menit';
 }
 
 class _StatusCard extends StatelessWidget {
@@ -535,8 +1201,12 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final offline = status.connection == DeviceConnection.offline;
     final risk = offline ? RiskLevel.unknown : status.riskLevel;
-    final color = offline ? AppColors.textMuted : risk.color;
-    final background = offline ? AppColors.surface : risk.softColor;
+    final color = offline ? context.appTextMuted : risk.color;
+    final background = offline
+        ? context.appSurface
+        : context.isDarkMode
+        ? risk.darkSoftColor
+        : risk.softColor;
     final flame = status.fire?.flameDetected == true;
     final label = offline
         ? 'Offline'
@@ -574,7 +1244,7 @@ class _StatusCard extends StatelessWidget {
               Text(
                 status.connection.label,
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
+                    ?.copyWith(fontSize: 10, color: context.appTextSecondary),
               ),
             ],
           ),
@@ -582,14 +1252,22 @@ class _StatusCard extends StatelessWidget {
           Text(
             'Pembaruan ${relativeTime(lastUpdate)}',
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
+                ?.copyWith(fontSize: 10, color: context.appTextSecondary),
           ),
+          if (status.connection == DeviceConnection.online) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Uptime ${_formatUptime(status.uptimeSeconds)}',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(fontSize: 10, color: AppColors.success),
+            ),
+          ],
           if (!offline && status.hasTelemetry) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Telemetri terakhir ${formatWibTime(lastUpdate)} WIB',
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                  ?.copyWith(fontSize: 9, color: context.appTextMuted),
             ),
           ],
         ],
@@ -614,7 +1292,7 @@ class _SectionHeader extends StatelessWidget {
           Text(
             trailing!,
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                ?.copyWith(fontSize: 10, color: context.appTextMuted),
           ),
       ],
     );
@@ -644,7 +1322,7 @@ class _SensorRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Row(
         children: [
-          Icon(icon, size: 19, color: AppColors.textSecondary),
+          Icon(icon, size: 19, color: context.appTextSecondary),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -659,7 +1337,7 @@ class _SensorRow extends StatelessWidget {
                 Text(
                   caption,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 9, color: AppColors.textSecondary),
+                      ?.copyWith(fontSize: 9, color: context.appTextSecondary),
                 ),
               ],
             ),
@@ -680,7 +1358,7 @@ class _SensorRow extends StatelessWidget {
               Text(
                 valueCaption,
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 8.5, color: AppColors.textMuted),
+                    ?.copyWith(fontSize: 8.5, color: context.appTextMuted),
               ),
             ],
           ),
@@ -707,7 +1385,7 @@ class _InfoRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textSecondary),
+                  ?.copyWith(color: context.appTextSecondary),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -716,7 +1394,7 @@ class _InfoRow extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textPrimary),
+                  ?.copyWith(color: context.appTextPrimary),
             ),
           ),
         ],
@@ -743,12 +1421,12 @@ class _ChartTimeLabels extends StatelessWidget {
         Text(
           formatWibTime(firstAt),
           style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+              ?.copyWith(fontSize: 9, color: context.appTextMuted),
         ),
         Text(
           formatWibTime(lastAt),
           style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+              ?.copyWith(fontSize: 9, color: context.appTextMuted),
         ),
       ],
     );
@@ -786,7 +1464,7 @@ class _ErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textPrimary),
+                  ?.copyWith(color: context.appTextPrimary),
             ),
           ),
           TextButton(onPressed: onRetry, child: const Text('Ulangi')),
