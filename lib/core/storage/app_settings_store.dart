@@ -7,6 +7,7 @@ class AppSettingsStore {
   final FlutterSecureStorage _storage;
 
   static const _apiBaseUrlKey = 'api_base_url';
+  static const _themeModeKey = 'theme_mode';
 
   Future<String?> readApiBaseUrl() async {
     final value = await _storage.read(key: _apiBaseUrlKey);
@@ -17,5 +18,11 @@ class AppSettingsStore {
 
   Future<void> saveApiBaseUrl(String value) {
     return _storage.write(key: _apiBaseUrlKey, value: value.trim());
+  }
+
+  Future<String?> readThemeMode() => _storage.read(key: _themeModeKey);
+
+  Future<void> saveThemeMode(String value) {
+    return _storage.write(key: _themeModeKey, value: value);
   }
 }

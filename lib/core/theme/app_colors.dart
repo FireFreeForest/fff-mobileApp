@@ -22,3 +22,40 @@ class AppColors {
   static const Color infoSoft = Color(0xFFFFF0E1);
   static const Color dark = Color(0xFF292925);
 }
+
+extension AppThemeColors on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  Color get appBackground =>
+      isDarkMode ? const Color(0xFF171713) : AppColors.background;
+
+  Color get appSurface =>
+      isDarkMode ? const Color(0xFF23231F) : AppColors.surface;
+
+  Color get appSurfaceAlt =>
+      isDarkMode ? const Color(0xFF292925) : AppColors.surfaceAlt;
+
+  Color get appBorder =>
+      isDarkMode ? const Color(0xFF494842) : AppColors.border;
+
+  Color get appTextPrimary =>
+      isDarkMode ? const Color(0xFFF3F0E8) : AppColors.textPrimary;
+
+  Color get appTextSecondary =>
+      isDarkMode ? const Color(0xFFE3E0D6) : AppColors.textSecondary;
+
+  Color get appTextMuted =>
+      isDarkMode ? const Color(0xFFC2C0B6) : AppColors.textMuted;
+
+  Color get appSuccessSoft =>
+      isDarkMode ? const Color(0xFF303C33) : AppColors.successSoft;
+
+  Color get appWarningSoft =>
+      isDarkMode ? const Color(0xFF433A27) : AppColors.warningSoft;
+
+  Color get appDangerSoft =>
+      isDarkMode ? const Color(0xFF4A302B) : AppColors.dangerSoft;
+
+  Color get appInfoSoft =>
+      isDarkMode ? const Color(0xFF45382D) : AppColors.infoSoft;
+}

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
+import '../core/theme/theme_controller.dart';
 import '../services/fcm_service.dart';
 import '../services/realtime_service.dart';
 import '../state/auth_controller.dart';
@@ -80,10 +81,13 @@ class _AppState extends State<App> {
 
   @override
   Widget build(BuildContext context) {
+    final themeController = context.watch<ThemeController>();
     return MaterialApp.router(
       title: 'Fire Free Forest',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeController.flutterMode,
       routerConfig: _router,
     );
   }

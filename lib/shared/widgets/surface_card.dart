@@ -21,13 +21,22 @@ class SurfaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final effectiveColor = color == AppColors.surface
+        ? context.appSurface
+        : (isDark && color == AppColors.surfaceAlt
+              ? context.appSurfaceAlt
+              : color);
     final content = Container(
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: color,
+        color: effectiveColor,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: isDark ? const Color(0xFF494842) : AppColors.border,
+        ),
       ),
       child: child,
     );

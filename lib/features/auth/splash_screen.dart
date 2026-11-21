@@ -21,7 +21,7 @@ class SplashScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 letterSpacing: 2.4,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
+                color: context.appTextSecondary,
               ),
             ),
             const SizedBox(height: AppSpacing.xl),

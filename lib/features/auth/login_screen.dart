@@ -8,6 +8,7 @@ import '../../core/storage/app_settings_store.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../shared/widgets/app_logo.dart';
+import '../../shared/widgets/app_header.dart';
 import '../../shared/widgets/server_settings_dialog.dart';
 import '../../shared/widgets/surface_card.dart';
 import '../../services/realtime_service.dart';
@@ -91,9 +92,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: AppLogo(),
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [AppLogo(), ThemeQuickToggle()],
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       Text(
@@ -113,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         'Pantau kondisi hutan, status node, dan peringatan kebakaran dari satu tempat.',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: context.appTextSecondary,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
@@ -258,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textMuted,
+                          color: context.appTextMuted,
                         ),
                       ),
                     ],

@@ -307,7 +307,6 @@ class _StatusScreenState extends State<StatusScreen> {
         .length;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           Positioned.fill(
@@ -318,7 +317,7 @@ class _StatusScreenState extends State<StatusScreen> {
                 initialZoom: _initialZoom,
                 minZoom: 4,
                 maxZoom: 18,
-                backgroundColor: AppColors.background,
+                backgroundColor: context.appBackground,
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
@@ -456,25 +455,14 @@ class _StatusScreenState extends State<StatusScreen> {
                     ),
                   ],
                   const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _FilterBar(
-                          selected: _filter,
-                          counts: {
-                            for (final filter in _StatusFilter.values)
-                              filter: _countFor(filter),
-                          },
-                          onSelect: _setFilter,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      _MapActionButton(
-                        icon: Icons.my_location_rounded,
-                        tooltip: 'Pusatkan peta',
-                        onPressed: _fitNodes,
-                      ),
-                    ],
+                  _FilterBar(
+                    selected: _filter,
+                    counts: {
+                      for (final filter in _StatusFilter.values)
+                        filter: _countFor(filter),
+                    },
+                    onSelect: _setFilter,
+                    onCenterMap: _fitNodes,
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   const Align(
@@ -514,9 +502,9 @@ class _TopBar extends StatelessWidget {
         AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.96),
+        color: context.appSurface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.appBorder),
         boxShadow: const [
           BoxShadow(
             color: Color(0x12000000),
@@ -542,7 +530,7 @@ class _TopBar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                      ?.copyWith(fontSize: 10, color: context.appTextMuted),
                 ),
               ],
             ),
@@ -568,29 +556,52 @@ class _FilterBar extends StatelessWidget {
     required this.selected,
     required this.counts,
     required this.onSelect,
+    required this.onCenterMap,
   });
 
   final _StatusFilter selected;
   final Map<_StatusFilter, int> counts;
   final ValueChanged<_StatusFilter> onSelect;
+  final VoidCallback onCenterMap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _StatusFilter.values.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          final filter = _StatusFilter.values[index];
-          return _FilterChip(
-            filter: filter,
-            count: counts[filter] ?? 0,
-            selected: selected == filter,
-            onTap: () => onSelect(filter),
-          );
-        },
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.appSurface.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: context.appBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 12,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          for (final filter in _StatusFilter.values)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: _FilterChip(
+                  filter: filter,
+                  count: counts[filter] ?? 0,
+                  selected: selected == filter,
+                  onTap: () => onSelect(filter),
+                ),
+              ),
+            ),
+          const SizedBox(width: 2),
+          _MapActionButton(
+            icon: Icons.my_location_rounded,
+            tooltip: 'Pusatkan peta',
+            onPressed: onCenterMap,
+          ),
+        ],
       ),
     );
   }
@@ -622,57 +633,38 @@ class _FilterChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: 7,
-          ),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected
-                ? color.withValues(alpha: 0.15)
-                : AppColors.surface.withValues(alpha: 0.94),
+                ? color.withValues(alpha: 0.16)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-            border: Border.all(
-              color: selected
-                  ? color.withValues(alpha: 0.55)
-                  : AppColors.border,
-            ),
-            boxShadow: selected
-                ? null
-                : const [
-                    BoxShadow(
-                      color: Color(0x0F000000),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
+            border: selected
+                ? Border.all(color: color.withValues(alpha: 0.42))
+                : null,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 filter.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9.5,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? color : AppColors.textSecondary,
+                  color: selected ? color : context.appTextSecondary,
                 ),
               ),
-              const SizedBox(width: 5),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? color.withValues(alpha: 0.16)
-                      : AppColors.background,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? color : AppColors.textMuted,
-                  ),
+              const SizedBox(height: 1),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? color : context.appTextMuted,
                 ),
               ),
             ],
@@ -697,14 +689,14 @@ class _MapActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.surface.withValues(alpha: 0.96),
+      color: context.appSurface.withValues(alpha: 0.96),
       elevation: 1,
       shape: const CircleBorder(),
       child: IconButton(
         onPressed: onPressed,
         tooltip: tooltip,
         visualDensity: VisualDensity.compact,
-        icon: Icon(icon, size: 19, color: AppColors.textPrimary),
+        icon: Icon(icon, size: 19, color: context.appTextPrimary),
       ),
     );
   }
@@ -718,21 +710,24 @@ class _MapLegend extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
+        vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.92),
+        color: context.appSurface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.8)),
+        border: Border.all(color: context.appBorder.withValues(alpha: 0.8)),
       ),
-      child: Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.xs,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: const [
           _LegendItem(color: AppColors.success, label: 'Normal'),
+          SizedBox(width: 7),
           _LegendItem(color: AppColors.warning, label: 'Waspada'),
+          SizedBox(width: 7),
           _LegendItem(color: AppColors.danger, label: 'Bahaya'),
+          SizedBox(width: 7),
           _LegendItem(color: AppColors.emergency, label: 'Darurat'),
+          SizedBox(width: 7),
           _LegendItem(color: AppColors.textMuted, label: 'Offline'),
         ],
       ),
@@ -759,7 +754,7 @@ class _LegendItem extends StatelessWidget {
         const SizedBox(width: 3),
         Text(
           label,
-          style: const TextStyle(fontSize: 8, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 8, color: context.appTextSecondary),
         ),
       ],
     );
@@ -782,7 +777,7 @@ class _MapMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final offline = status.connection == DeviceConnection.offline;
-    final color = offline ? AppColors.textMuted : status.riskLevel.color;
+    final color = offline ? context.appTextMuted : status.riskLevel.color;
     final size = selected ? 34.0 : 28.0;
 
     return Semantics(
@@ -849,7 +844,7 @@ class _MapMarker extends StatelessWidget {
                     top: 0,
                     child: _ConnectionBadge(
                       online: !offline,
-                      color: offline ? AppColors.textMuted : AppColors.success,
+                      color: offline ? context.appTextMuted : AppColors.success,
                     ),
                   ),
                 ],
@@ -864,7 +859,7 @@ class _MapMarker extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.surface.withValues(alpha: 0.94),
+                        color: context.appSurface.withValues(alpha: 0.94),
                         borderRadius: BorderRadius.circular(
                           AppSpacing.radiusPill,
                         ),
@@ -906,7 +901,7 @@ class _ConnectionBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.surface, width: 1.8),
+        border: Border.all(color: context.appSurface, width: 1.8),
       ),
       child: Icon(
         online ? Icons.check_rounded : Icons.remove_rounded,
@@ -945,10 +940,10 @@ class _StatusSheet extends StatelessWidget {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.radiusLg),
+          top: const Radius.circular(AppSpacing.radiusLg),
         ),
         boxShadow: [
           BoxShadow(
@@ -968,7 +963,7 @@ class _StatusSheet extends StatelessWidget {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: context.appBorder,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
               ),
             ),
@@ -995,7 +990,7 @@ class _StatusSheet extends StatelessWidget {
                           ? '${statuses.length} node'
                           : '${filter.label} · ${statuses.length}',
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                          ?.copyWith(fontSize: 9, color: context.appTextMuted),
                     ),
                   ],
                 ),
@@ -1100,7 +1095,7 @@ class _SummaryBody extends StatelessWidget {
         Text(
           hint,
           style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+              ?.copyWith(fontSize: 10, color: context.appTextMuted),
         ),
         if (statuses.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -1127,7 +1122,7 @@ class _SummaryBody extends StatelessWidget {
               Text(
                 'Urut risiko',
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                    ?.copyWith(fontSize: 9, color: context.appTextMuted),
               ),
             ],
           ),
@@ -1138,7 +1133,7 @@ class _SummaryBody extends StatelessWidget {
               onTap: () => onSelect(statuses[index]),
             ),
             if (index != statuses.length - 1)
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: context.appBorder),
           ],
         ] else if (filter != _StatusFilter.all && total > 0 && !loading) ...[
           const SizedBox(height: AppSpacing.md),
@@ -1164,23 +1159,23 @@ class _FilterEmpty extends StatelessWidget {
         AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: context.appSurfaceAlt,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.appBorder),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.filter_alt_off_outlined,
             size: 18,
-            color: AppColors.textMuted,
+            color: context.appTextMuted,
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               'Tidak ada node yang cocok dengan filter ini.',
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
+                  ?.copyWith(fontSize: 10, color: context.appTextSecondary),
             ),
           ),
           TextButton(onPressed: onReset, child: const Text('Reset')),
@@ -1200,7 +1195,7 @@ class _NodeRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final device = status.device;
     final offline = status.connection == DeviceConnection.offline;
-    final color = offline ? AppColors.textMuted : status.riskLevel.color;
+    final color = offline ? context.appTextMuted : status.riskLevel.color;
     final fire = status.fire;
     final smoke = fire?.smokeLevel;
     final lastSeen = status.lastTelemetryAt ?? status.lastSeenAt;
@@ -1239,7 +1234,7 @@ class _NodeRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: context.appTextPrimary,
                       ),
                     ),
                     const SizedBox(height: 1),
@@ -1249,14 +1244,14 @@ class _NodeRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         fontSize: 9,
-                        color: offline ? AppColors.textMuted : color,
+                        color: offline ? context.appTextMuted : color,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       relativeTime(lastSeen),
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(fontSize: 8, color: AppColors.textMuted),
+                          ?.copyWith(fontSize: 8, color: context.appTextMuted),
                     ),
                   ],
                 ),
@@ -1271,20 +1266,20 @@ class _NodeRow extends StatelessWidget {
                       color:
                           smoke != null && smoke >= AppConfig.smokeThresholdAdc
                           ? AppColors.danger
-                          : AppColors.textPrimary,
+                          : context.appTextPrimary,
                     ),
                   ),
-                  const Text(
+                  Text(
                     'ADC',
-                    style: TextStyle(fontSize: 8, color: AppColors.textMuted),
+                    style: TextStyle(fontSize: 8, color: context.appTextMuted),
                   ),
                 ],
               ),
               const SizedBox(width: AppSpacing.xs),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: AppColors.textMuted,
+                color: context.appTextMuted,
               ),
             ],
           ),
@@ -1315,10 +1310,10 @@ class _SelectedNodePanel extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
+        decoration: BoxDecoration(
+          color: context.appSurface,
           borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppSpacing.radiusLg),
+            top: const Radius.circular(AppSpacing.radiusLg),
           ),
           boxShadow: [
             BoxShadow(
@@ -1351,7 +1346,7 @@ class _SelectedNodePanel extends StatelessWidget {
                     Text(
                       '$total node',
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                          ?.copyWith(fontSize: 9, color: context.appTextMuted),
                     ),
                   ],
                 ),
@@ -1386,7 +1381,7 @@ class _SelectedBody extends StatelessWidget {
     final device = status.device;
     final offline = status.connection == DeviceConnection.offline;
     final risk = offline ? RiskLevel.unknown : status.riskLevel;
-    final color = offline ? AppColors.textMuted : risk.color;
+    final color = offline ? context.appTextMuted : risk.color;
     final fire = status.fire;
     final smoke = fire?.smokeLevel;
     final lastSeen = status.lastTelemetryAt ?? status.lastSeenAt;
@@ -1421,7 +1416,7 @@ class _SelectedBody extends StatelessWidget {
         Text(
           device.locationLabel,
           style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
+              ?.copyWith(fontSize: 10, color: context.appTextSecondary),
         ),
         const SizedBox(height: AppSpacing.xs),
         Wrap(
@@ -1431,14 +1426,14 @@ class _SelectedBody extends StatelessWidget {
           children: [
             _StatusPill(
               label: offline ? 'Offline' : 'Online',
-              color: offline ? AppColors.textMuted : AppColors.success,
+              color: offline ? context.appTextMuted : AppColors.success,
               icon: offline ? Icons.wifi_off_rounded : Icons.wifi_rounded,
             ),
             _StatusPill(label: risk.label, color: color, icon: risk.icon),
             Text(
               relativeTime(lastSeen),
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                  ?.copyWith(fontSize: 9, color: context.appTextMuted),
             ),
           ],
         ),
@@ -1531,7 +1526,7 @@ class _NodeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final offline = status.connection == DeviceConnection.offline;
-    final color = offline ? AppColors.textMuted : status.riskLevel.color;
+    final color = offline ? context.appTextMuted : status.riskLevel.color;
 
     return InkWell(
       onTap: onTap,
@@ -1565,18 +1560,18 @@ class _NodeChip extends StatelessWidget {
             ),
             if (offline) ...[
               const SizedBox(width: 4),
-              const Icon(
+              Icon(
                 Icons.wifi_off_rounded,
                 size: 10,
-                color: AppColors.textMuted,
+                color: context.appTextMuted,
               ),
             ],
             if (!status.device.hasLocation) ...[
               const SizedBox(width: 4),
-              const Icon(
+              Icon(
                 Icons.location_off_outlined,
                 size: 11,
-                color: AppColors.textMuted,
+                color: context.appTextMuted,
               ),
             ],
           ],
@@ -1613,7 +1608,7 @@ class _MiniMetric extends StatelessWidget {
             Text(
               suffix,
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(fontSize: 8, color: AppColors.textMuted),
+                  ?.copyWith(fontSize: 8, color: context.appTextMuted),
             ),
           ],
         ),
@@ -1654,7 +1649,7 @@ class _StatusErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textPrimary),
+                  ?.copyWith(color: context.appTextPrimary),
             ),
           ),
           TextButton(onPressed: onRetry, child: const Text('Ulangi')),

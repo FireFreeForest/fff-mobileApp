@@ -143,7 +143,7 @@ class _PumpControlCardState extends State<PumpControlCard> {
                   fontWeight: FontWeight.w500,
                   color: pumpOn == true
                       ? AppColors.primary
-                      : AppColors.textSecondary,
+                      : context.appTextSecondary,
                 ),
               ),
             ],
@@ -152,7 +152,7 @@ class _PumpControlCardState extends State<PumpControlCard> {
           Text(
             'Kontrol manual · pompa menyala 30 detik',
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                ?.copyWith(fontSize: 10, color: context.appTextMuted),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -177,7 +177,7 @@ class _PumpControlCardState extends State<PumpControlCard> {
             Text(
               'Hanya admin dan petugas yang dapat mengontrol pompa.',
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                  ?.copyWith(fontSize: 10, color: context.appTextMuted),
             ),
           ] else if (!widget.online) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -204,7 +204,7 @@ class _PumpControlCardState extends State<PumpControlCard> {
                         : 'Perintah ${command.status.label.toLowerCase()}...',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontSize: 10,
-                      color: AppColors.textSecondary,
+                      color: context.appTextSecondary,
                     ),
                   ),
                 ),
@@ -222,7 +222,7 @@ class _PumpControlCardState extends State<PumpControlCard> {
                     : command.status == CommandStatus.failed ||
                           command.status == CommandStatus.timeout
                     ? AppColors.danger
-                    : AppColors.textSecondary,
+                    : context.appTextSecondary,
               ),
             ),
           ],

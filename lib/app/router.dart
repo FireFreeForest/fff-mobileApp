@@ -8,6 +8,7 @@ import '../features/nodes/add_node_screen.dart';
 import '../features/nodes/node_detail_screen.dart';
 import '../features/nodes/nodes_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/settings/user_management_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/status/status_screen.dart';
 import '../state/auth_controller.dart';
@@ -77,6 +78,10 @@ GoRouter createRouter(AuthController authController) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/users',
+        builder: (context, state) => const UserManagementScreen(),
       ),
     ],
   );
