@@ -184,6 +184,42 @@ DeviceStatus _status({
 }
 
 void main() {
+  group('Event model', () {
+    test('parses nested device and exposes display identifiers', () {
+      final event = Event.fromJson({
+        'id': 'event-1',
+        'device_id': 'device-uuid',
+        'device': {
+          'id': 'device-uuid',
+          'device_id': 'FFF-ABCDEFGH',
+          'name': 'Blok A',
+          'location_name': 'Sektor 1',
+          'status': 'online',
+          'firmware_version': '1.2.0',
+        },
+        'event_type': 'FIRE_DETECTED',
+        'severity': 'critical',
+        'status': 'active',
+      });
+
+      expect(event.deviceCode, 'FFF-ABCDEFGH');
+      expect(event.deviceName, 'Blok A');
+      expect(event.deviceLocation, 'Sektor 1');
+      expect(event.device?.id, 'device-uuid');
+    });
+
+    test('falls back safely when nested device is absent', () {
+      final event = Event.fromJson({
+        'id': 'event-2',
+        'device_id': 'device-uuid',
+      });
+
+      expect(event.device, isNull);
+      expect(event.deviceCode, 'device-uuid');
+      expect(event.deviceName, 'device-uuid');
+    });
+  });
+
   group('Telemetry model', () {
     test('accepts environment payload without DHT readings', () {
       final environment = TelemetryEnvironment.fromJson({
@@ -214,6 +250,32 @@ void main() {
   });
 
   group('Realtime updates', () {
+    test('parses nested event device payload', () {
+      final realtime = RealtimeEvent.tryParse({
+        'type': RealtimeTypes.eventUpdated,
+        'device_id': 'FFF-ABCDEFGH',
+        'data': {
+          'event': {
+            'id': 'event-1',
+            'device_id': 'device-uuid',
+            'device': {
+              'id': 'device-uuid',
+              'device_id': 'FFF-ABCDEFGH',
+              'name': 'Blok A',
+              'location_name': 'Sektor 1',
+              'status': 'online',
+            },
+            'event_type': 'FIRE_DETECTED',
+            'severity': 'critical',
+            'status': 'acknowledged',
+          },
+        },
+      });
+
+      expect(realtime?.eventPayload?.deviceCode, 'FFF-ABCDEFGH');
+      expect(realtime?.eventPayload?.deviceLocation, 'Sektor 1');
+    });
+
     test('applies telemetry, risk, and device status events', () {
       final status = _status(
         deviceId: 'FFF-01',
