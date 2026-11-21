@@ -34,6 +34,20 @@ extension RiskLevelStyle on RiskLevel {
     }
   }
 
+  Color get darkSoftColor {
+    switch (this) {
+      case RiskLevel.normal:
+        return const Color(0xFF303C33);
+      case RiskLevel.waspada:
+        return const Color(0xFF433A27);
+      case RiskLevel.bahaya:
+      case RiskLevel.darurat:
+        return const Color(0xFF4A302B);
+      case RiskLevel.unknown:
+        return const Color(0xFF292925);
+    }
+  }
+
   IconData get icon {
     switch (this) {
       case RiskLevel.normal:

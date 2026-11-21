@@ -101,7 +101,11 @@ class _NodesScreenState extends State<NodesScreen> {
     }
 
     try {
-      final statuses = await context.read<DeviceRepository>().listStatuses();
+      final query = _searchController.text.trim();
+      final repository = context.read<DeviceRepository>();
+      final statuses = query.isEmpty
+          ? await repository.listStatuses()
+          : await repository.listStatuses(query: query);
       statuses.sort(_compareStatuses);
 
       if (!mounted) return;
@@ -156,7 +160,6 @@ class _NodesScreenState extends State<NodesScreen> {
     final visible = _visibleStatuses;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -200,13 +203,14 @@ class _NodesScreenState extends State<NodesScreen> {
                   child: TextField(
                     controller: _searchController,
                     onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => _load(showSpinner: false),
                     textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
                       hintText: 'Cari ID, nama, atau lokasi',
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search_rounded,
                         size: 20,
-                        color: AppColors.textMuted,
+                        color: context.appTextMuted,
                       ),
                       suffixIcon: _searchController.text.isEmpty
                           ? null
@@ -323,55 +327,43 @@ class _NodesScreenState extends State<NodesScreen> {
         AppSpacing.lg,
         AppSpacing.sm,
       ),
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      height: 44,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: context.appBorder),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: filters.entries.map((entry) {
-            final selected = _filter == entry.key;
-            return Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.xl),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                onTap: () => setState(() => _filter = entry.key),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.sm,
-                    horizontal: AppSpacing.xs,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        entry.value,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: selected
-                              ? AppColors.primary
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: 24,
-                        height: 2,
-                        color: selected
-                            ? AppColors.primary
-                            : Colors.transparent,
-                      ),
-                    ],
+      child: Row(
+        children: filters.entries.map((entry) {
+          final selected = _filter == entry.key;
+          return Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              onTap: () => setState(() => _filter = entry.key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.primary.withValues(alpha: 0.14)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: Text(
+                  entry.value,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? AppColors.primaryDark
+                        : context.appTextSecondary,
                   ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -388,7 +380,7 @@ class _NodeRow extends StatelessWidget {
     final device = status.device;
     final fire = status.fire;
     final offline = status.connection == DeviceConnection.offline;
-    final color = offline ? AppColors.textMuted : status.riskLevel.color;
+    final color = offline ? context.appTextMuted : status.riskLevel.color;
     final smoke = fire?.smokeLevel;
     final smokeCritical = smoke != null && smoke >= AppConfig.smokeThresholdAdc;
 
@@ -411,8 +403,8 @@ class _NodeRow extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: context.appBorder)),
           ),
           child: Row(
             children: [
@@ -439,7 +431,7 @@ class _NodeRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                          ?.copyWith(fontSize: 10, color: context.appTextMuted),
                     ),
                   ],
                 ),
@@ -456,10 +448,10 @@ class _NodeRow extends StatelessWidget {
                         fontSize: 17,
                         fontWeight: FontWeight.w300,
                         color: offline
-                            ? AppColors.textMuted
+                            ? context.appTextMuted
                             : smokeCritical
                             ? AppColors.danger
-                            : AppColors.textPrimary,
+                            : context.appTextPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -477,10 +469,10 @@ class _NodeRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: AppColors.textMuted,
+                color: context.appTextMuted,
               ),
             ],
           ),
@@ -521,7 +513,7 @@ class _ErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textPrimary),
+                  ?.copyWith(color: context.appTextPrimary),
             ),
           ),
           TextButton(onPressed: onRetry, child: const Text('Ulangi')),

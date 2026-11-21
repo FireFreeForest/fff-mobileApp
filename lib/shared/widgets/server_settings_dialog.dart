@@ -80,7 +80,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
             Text(
               'Alamat API Fire Free Forest. Koneksi diuji ke /healthz sebelum disimpan.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.appTextSecondary,
               ),
             ),
             const SizedBox(height: AppSpacing.md),

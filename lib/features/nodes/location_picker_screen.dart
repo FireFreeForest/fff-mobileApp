@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../shared/widgets/app_header.dart';
 
 class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({super.key, this.initialLocation});
@@ -30,10 +31,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     final center = _selected ?? _defaultCenter;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Pilih lokasi node'),
         actions: [
+          const ThemeQuickToggle(),
           TextButton(
             onPressed: _selected == null
                 ? null
@@ -90,14 +91,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 vertical: AppSpacing.sm,
               ),
               decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.94),
+                color: context.appSurface.withValues(alpha: 0.94),
                 borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               ),
               child: Text(
                 'Ketuk peta untuk menempatkan titik lokasi node.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
+                    ?.copyWith(fontSize: 10, color: context.appTextSecondary),
               ),
             ),
           ),
@@ -110,7 +111,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               child: Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
                 child: Column(

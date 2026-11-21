@@ -11,6 +11,7 @@ import '../../data/geocoding_repository.dart';
 import '../../data/provisioning_service.dart';
 import '../../models/device.dart';
 import '../../state/auth_controller.dart';
+import '../../shared/widgets/app_header.dart';
 import 'location_picker_screen.dart';
 
 class AddNodeScreen extends StatefulWidget {
@@ -260,9 +261,14 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
     final auth = context.watch<AuthController>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
         toolbarHeight: 82,
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: AppSpacing.sm),
+            child: ThemeQuickToggle(),
+          ),
+        ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -274,7 +280,7 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
             Text(
               'Sambungkan perangkat ESP8266 baru',
               style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textMuted),
+                  ?.copyWith(color: context.appTextMuted),
             ),
           ],
         ),
@@ -317,7 +323,7 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.auto_awesome_outlined,
                           color: AppColors.primary,
                           size: 20,
@@ -387,19 +393,19 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(AppSpacing.md),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surface,
+                                  color: context.appSurface,
                                   borderRadius: BorderRadius.circular(
                                     AppSpacing.radiusSm,
                                   ),
                                   border: Border.all(
                                     color: field.hasError
                                         ? AppColors.danger
-                                        : AppColors.border,
+                                        : context.appBorder,
                                   ),
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.map_outlined,
                                       color: AppColors.primary,
                                     ),
@@ -415,14 +421,14 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                                             .bodySmall
                                             ?.copyWith(
                                               color: _location == null
-                                                  ? AppColors.textMuted
-                                                  : AppColors.textPrimary,
+                                                  ? context.appTextMuted
+                                                  : context.appTextPrimary,
                                             ),
                                       ),
                                     ),
-                                    const Icon(
+                                    Icon(
                                       Icons.chevron_right_rounded,
-                                      color: AppColors.textMuted,
+                                      color: context.appTextMuted,
                                     ),
                                   ],
                                 ),
@@ -502,7 +508,7 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.info_outline_rounded,
                           size: 18,
                           color: AppColors.primary,
@@ -514,7 +520,7 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   fontSize: 10,
-                                  color: AppColors.textSecondary,
+                                  color: context.appTextSecondary,
                                   height: 1.5,
                                 ),
                           ),
@@ -575,7 +581,7 @@ class _AddNodeScreenState extends State<AddNodeScreen> {
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontSize: 9,
-                      color: AppColors.textMuted,
+                      color: context.appTextMuted,
                       height: 1.5,
                     ),
                   ),
@@ -604,7 +610,7 @@ class _SetupCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
       child: Column(
@@ -638,7 +644,7 @@ class _SetupCard extends StatelessWidget {
                     fontSize: 9.5,
                     color: connected
                         ? AppColors.success
-                        : AppColors.textSecondary,
+                        : context.appTextSecondary,
                   ),
                 ),
               ),
@@ -705,14 +711,14 @@ class _SetupStep extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 12, color: AppColors.textPrimary),
+                    ?.copyWith(fontSize: 12, color: context.appTextPrimary),
               ),
               const SizedBox(height: 4),
               Text(
                 detail,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 10,
-                  color: AppColors.textSecondary,
+                  color: context.appTextSecondary,
                   height: 1.55,
                 ),
               ),
@@ -740,14 +746,14 @@ class _SectionTitle extends StatelessWidget {
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             fontSize: 9,
             letterSpacing: 0.8,
-            color: AppColors.textSecondary,
+            color: context.appTextSecondary,
           ),
         ),
         if (trailing != null)
           Text(
             trailing!,
             style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                ?.copyWith(fontSize: 10, color: context.appTextMuted),
           ),
       ],
     );
@@ -769,7 +775,7 @@ class _FieldLabel extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 11, color: AppColors.textPrimary),
+              ?.copyWith(fontSize: 11, color: context.appTextPrimary),
         ),
         const SizedBox(height: 6),
         child,
@@ -779,7 +785,7 @@ class _FieldLabel extends StatelessWidget {
             helper!,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               fontSize: 9,
-              color: AppColors.textMuted,
+              color: context.appTextMuted,
               height: 1.4,
             ),
           ),
@@ -799,10 +805,10 @@ class _NoAccess extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.admin_panel_settings_outlined,
             size: 48,
-            color: AppColors.textMuted,
+            color: context.appTextMuted,
           ),
           const SizedBox(height: AppSpacing.md),
           Text(

@@ -24,7 +24,7 @@ class SmokeChart extends StatelessWidget {
           child: Text(
             'Belum ada riwayat asap.',
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AppColors.textMuted),
+                ?.copyWith(color: context.appTextMuted),
           ),
         ),
       );
@@ -39,7 +39,7 @@ class SmokeChart extends StatelessWidget {
           threshold: threshold,
           lineColor: AppColors.primary,
           fillColor: AppColors.primary.withValues(alpha: 0.18),
-          gridColor: AppColors.border,
+          gridColor: context.appBorder,
           thresholdColor: AppColors.danger,
         ),
       ),

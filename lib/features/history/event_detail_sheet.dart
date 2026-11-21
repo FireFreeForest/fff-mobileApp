@@ -50,6 +50,38 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
   late Event _event = widget.event;
   bool _busy = false;
   String? _error;
+  List<EventTimeline> _timeline = const [];
+  bool _timelineLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTimeline();
+  }
+
+  Future<void> _loadTimeline() async {
+    try {
+      final repository = context.read<EventRepository>();
+      final detail = await repository.getEvent(widget.event.id);
+      final timeline = await repository.listTimeline(
+        widget.event.id,
+        perPage: 50,
+      );
+      if (!mounted) return;
+      setState(() {
+        _event = detail;
+        _timeline = timeline.items;
+        _timelineLoading = false;
+      });
+      widget.onUpdated(detail);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _timeline = _event.timelinePreview;
+        _timelineLoading = false;
+      });
+    }
+  }
 
   Future<void> _run(
     Future<Event> Function(EventRepository repository) action,
@@ -93,9 +125,10 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
     final auth = context.watch<AuthController>();
     final event = _event;
     final severityColor = _severityColor(event.severity);
-    final deviceLabel = widget.device == null
-        ? event.deviceId
-        : '${widget.device!.deviceId} · ${widget.device!.locationLabel}';
+    final device = event.device ?? widget.device;
+    final deviceLabel = device == null
+        ? event.deviceCode
+        : '${device.deviceId} · ${device.locationLabel}';
     final canAcknowledge =
         auth.canOperate && event.status == EventStatus.active;
     final canResolve = auth.canResolve && event.status != EventStatus.resolved;
@@ -106,8 +139,8 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.86,
         ),
-        decoration: const BoxDecoration(
-          color: AppColors.background,
+        decoration: BoxDecoration(
+          color: context.appBackground,
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppSpacing.radiusLg),
           ),
@@ -128,7 +161,7 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
+                    color: context.appBorder,
                     borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
                   ),
                 ),
@@ -150,7 +183,7 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
                 child: Column(
@@ -214,7 +247,7 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
                   vertical: AppSpacing.xs,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
                 child: Column(
@@ -238,6 +271,55 @@ class _EventDetailSheetState extends State<EventDetailSheet> {
                   ],
                 ),
               ),
+              const SizedBox(height: AppSpacing.md),
+              Text('Linimasa', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: AppSpacing.sm),
+              if (_timelineLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.md),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (_timeline.isEmpty)
+                const Text('Belum ada catatan linimasa.')
+              else
+                ..._timeline.map(
+                  (item) => Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: context.appSurface,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        if (item.description.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            item.description,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        if (item.occurredAt != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            formatWibDateTime(item.occurredAt),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: context.appTextMuted),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               if (_error != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Container(
@@ -337,7 +419,7 @@ class _StatusChip extends StatelessWidget {
     final (background, foreground) = switch (status) {
       EventStatus.active => (AppColors.warningSoft, AppColors.warning),
       EventStatus.acknowledged => (AppColors.successSoft, AppColors.success),
-      EventStatus.resolved => (AppColors.surface, AppColors.textSecondary),
+      EventStatus.resolved => (context.appSurface, context.appTextSecondary),
     };
 
     return Container(
@@ -383,7 +465,7 @@ class _InfoRow extends StatelessWidget {
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 10, color: AppColors.textMuted),
+                      ?.copyWith(fontSize: 10, color: context.appTextMuted),
                 ),
               ),
               Expanded(
@@ -391,7 +473,7 @@ class _InfoRow extends StatelessWidget {
                   value,
                   textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 11, color: AppColors.textPrimary),
+                      ?.copyWith(fontSize: 11, color: context.appTextPrimary),
                 ),
               ),
             ],

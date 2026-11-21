@@ -11,6 +11,7 @@ import 'core/config/server_config.dart';
 import 'core/network/api_client.dart';
 import 'core/storage/app_settings_store.dart';
 import 'core/storage/secure_token_store.dart';
+import 'core/theme/theme_controller.dart';
 import 'data/auth_repository.dart';
 import 'data/command_repository.dart';
 import 'data/dashboard_repository.dart';
@@ -19,6 +20,7 @@ import 'data/event_repository.dart';
 import 'data/geocoding_repository.dart';
 import 'data/provisioning_service.dart';
 import 'data/push_repository.dart';
+import 'data/user_repository.dart';
 import 'services/fcm_service.dart';
 import 'services/realtime_service.dart';
 import 'state/auth_controller.dart';
@@ -44,6 +46,7 @@ Future<void> main() async {
     tokenStore: tokenStore,
   );
   final pushRepository = PushRepository(apiClient: apiClient);
+  final userRepository = UserRepository(apiClient: apiClient);
   final deviceRepository = DeviceRepository(apiClient: apiClient);
   final geocodingRepository = GeocodingRepository(apiClient: apiClient);
   final commandRepository = CommandRepository(apiClient: apiClient);
@@ -61,6 +64,8 @@ Future<void> main() async {
     apiClient: apiClient,
     apiBaseUrl: initialBaseUrl,
   );
+  final themeController = ThemeController(settingsStore: settingsStore);
+  await themeController.load();
 
   await fcmService.initialize();
 
@@ -86,9 +91,11 @@ Future<void> main() async {
         Provider<EventRepository>.value(value: eventRepository),
         Provider<ProvisioningService>.value(value: provisioningService),
         Provider<PushRepository>.value(value: pushRepository),
+        Provider<UserRepository>.value(value: userRepository),
         Provider<FcmService>.value(value: fcmService),
         Provider<RealtimeService>.value(value: realtimeService),
         ChangeNotifierProvider<AuthController>.value(value: authController),
+        ChangeNotifierProvider<ThemeController>.value(value: themeController),
       ],
       child: const App(),
     ),

@@ -69,3 +69,61 @@ class TelemetryFire {
     );
   }
 }
+
+class EnvironmentAggregatePoint {
+  const EnvironmentAggregatePoint({
+    this.bucketStart,
+    this.temperature,
+    this.humidity,
+    this.soilMoisture,
+    this.sampleCount = 0,
+  });
+
+  final DateTime? bucketStart;
+  final double? temperature;
+  final double? humidity;
+  final double? soilMoisture;
+  final int sampleCount;
+
+  factory EnvironmentAggregatePoint.fromJson(Map<String, dynamic> json) {
+    return EnvironmentAggregatePoint(
+      bucketStart: parseDateTime(json['bucket_start']),
+      temperature: parseDouble(json['temperature']),
+      humidity: parseDouble(json['humidity']),
+      soilMoisture: parseDouble(json['soil_moisture']),
+      sampleCount: parseInt(json['sample_count']) ?? 0,
+    );
+  }
+}
+
+class FireAggregatePoint {
+  const FireAggregatePoint({
+    this.bucketStart,
+    this.flameLevel,
+    this.smokeLevel,
+    this.flameDetectedRatio,
+    this.pumpOnRatio,
+    this.buzzerOnRatio,
+    this.sampleCount = 0,
+  });
+
+  final DateTime? bucketStart;
+  final double? flameLevel;
+  final double? smokeLevel;
+  final double? flameDetectedRatio;
+  final double? pumpOnRatio;
+  final double? buzzerOnRatio;
+  final int sampleCount;
+
+  factory FireAggregatePoint.fromJson(Map<String, dynamic> json) {
+    return FireAggregatePoint(
+      bucketStart: parseDateTime(json['bucket_start']),
+      flameLevel: parseDouble(json['flame_level']),
+      smokeLevel: parseDouble(json['smoke_level']),
+      flameDetectedRatio: parseDouble(json['flame_detected_ratio']),
+      pumpOnRatio: parseDouble(json['pump_on_ratio']),
+      buzzerOnRatio: parseDouble(json['buzzer_on_ratio']),
+      sampleCount: parseInt(json['sample_count']) ?? 0,
+    );
+  }
+}
