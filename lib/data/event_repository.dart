@@ -52,4 +52,21 @@ class EventRepository {
     );
     return Event.fromJson(parseMap(response['data']));
   }
+
+  Future<Paginated<EventTimeline>> listTimeline(
+    String eventId, {
+    String include = 'all',
+    int page = 1,
+    int perPage = 50,
+  }) async {
+    final response = await _apiClient.getJson(
+      '/api/v1/events/$eventId/timeline',
+      query: {
+        'include': include,
+        'page': '$page',
+        'per_page': '$perPage',
+      },
+    );
+    return Paginated.fromJson(response, EventTimeline.fromJson);
+  }
 }

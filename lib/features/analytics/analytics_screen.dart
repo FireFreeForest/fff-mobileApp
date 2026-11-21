@@ -129,7 +129,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final data = _data;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -290,7 +289,7 @@ class _MetricGrid extends StatelessWidget {
             caption: 'Ambang ≥ $_smokeThreshold ADC',
             color: data.aboveThreshold > 0
                 ? AppColors.danger
-                : AppColors.textPrimary,
+                : context.appTextPrimary,
           ),
           _MetricCard(
             icon: Icons.notifications_active_outlined,
@@ -299,7 +298,7 @@ class _MetricGrid extends StatelessWidget {
             caption: _severityCaption(data.summary.activeEventsBySeverity),
             color: data.summary.activeEvents > 0
                 ? AppColors.warning
-                : AppColors.textPrimary,
+                : context.appTextPrimary,
           ),
         ],
       ),
@@ -333,18 +332,22 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final valueColor = color == AppColors.textPrimary
+        ? context.appTextPrimary
+        : color;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: AppColors.textMuted),
+              Icon(icon, size: 14, color: context.appTextMuted),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
@@ -352,7 +355,7 @@ class _MetricCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
+                      ?.copyWith(fontSize: 10, color: context.appTextSecondary),
                 ),
               ),
             ],
@@ -365,14 +368,14 @@ class _MetricCard extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontSize: 24,
                 fontWeight: FontWeight.w400,
-                color: color,
+                color: valueColor,
               ),
               children: [
                 if (unit != null)
                   TextSpan(
                     text: ' $unit',
                     style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: AppColors.textMuted),
+                        ?.copyWith(color: context.appTextMuted),
                   ),
               ],
             ),
@@ -383,7 +386,7 @@ class _MetricCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(fontSize: 8.5, color: AppColors.textMuted),
+                ?.copyWith(fontSize: 8.5, color: context.appTextMuted),
           ),
         ],
       ),
@@ -419,8 +422,9 @@ class _RiskDistribution extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: context.appBorder),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,7 +434,7 @@ class _RiskDistribution extends StatelessWidget {
                   child: SizedBox(
                     height: 8,
                     child: total == 0
-                        ? const ColoredBox(color: AppColors.border)
+                        ? ColoredBox(color: context.appBorder)
                         : Row(
                             children: [
                               for (final risk in visibleRisks)
@@ -468,21 +472,36 @@ class _RiskLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: risk.color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          '${risk.label} $count',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 10, color: AppColors.textSecondary),
-        ),
-      ],
+    return Container(
+      constraints: const BoxConstraints(minWidth: 88),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: risk.softColor,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: risk.color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: risk.color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${risk.label}  $count',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: risk.color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -512,7 +531,7 @@ class _NodeRanking extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
             child: statuses.isEmpty
@@ -545,7 +564,7 @@ class _RankingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final smoke = status.fire?.smokeLevel;
     final fraction = smoke == null ? 0.0 : (smoke / 1023).clamp(0.0, 1.0);
-    final color = smoke == null ? AppColors.textMuted : status.riskLevel.color;
+    final color = smoke == null ? context.appTextMuted : status.riskLevel.color;
 
     return InkWell(
       onTap: () => context.push('/nodes/${status.device.deviceId}'),
@@ -559,7 +578,7 @@ class _RankingRow extends StatelessWidget {
               child: Text(
                 rank.toString().padLeft(2, '0'),
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                    ?.copyWith(fontSize: 9, color: context.appTextMuted),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -573,7 +592,7 @@ class _RankingRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontSize: 10.5,
-                      color: AppColors.textPrimary,
+                      color: context.appTextPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -583,8 +602,8 @@ class _RankingRow extends StatelessWidget {
                       height: 3,
                       child: Stack(
                         children: [
-                          const Positioned.fill(
-                            child: ColoredBox(color: AppColors.border),
+                          Positioned.fill(
+                            child: ColoredBox(color: context.appBorder),
                           ),
                           FractionallySizedBox(
                             widthFactor: fraction,
@@ -656,7 +675,7 @@ class _RecentEvents extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
             child: events.isEmpty
@@ -671,8 +690,9 @@ class _RecentEvents extends StatelessWidget {
                         _EventRow(
                           event: events[index],
                           deviceCode:
+                              events[index].device?.deviceId ??
                               deviceCodes[events[index].deviceId] ??
-                              events[index].deviceId,
+                              events[index].deviceCode,
                         ),
                       ],
                     ],
@@ -718,7 +738,7 @@ class _EventRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textPrimary,
+                    color: context.appTextPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 11,
                   ),
@@ -729,7 +749,7 @@ class _EventRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(fontSize: 9.5, color: AppColors.textMuted),
+                      ?.copyWith(fontSize: 9.5, color: context.appTextMuted),
                 ),
               ],
             ),
@@ -750,7 +770,7 @@ class _EventRow extends StatelessWidget {
               Text(
                 relativeTime(event.triggeredAt ?? event.createdAt),
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 8.5, color: AppColors.textMuted),
+                    ?.copyWith(fontSize: 8.5, color: context.appTextMuted),
               ),
             ],
           ),
@@ -796,12 +816,12 @@ class _SectionHeader extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(fontSize: 9, color: AppColors.textSecondary),
+              ?.copyWith(fontSize: 9, color: context.appTextSecondary),
         ),
         Text(
           trailing,
           style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+              ?.copyWith(fontSize: 9, color: context.appTextMuted),
         ),
       ],
     );
@@ -849,11 +869,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.cloud_off_rounded,
-            size: 44,
-            color: AppColors.textMuted,
-          ),
+          Icon(Icons.cloud_off_rounded, size: 44, color: context.appTextMuted),
           const SizedBox(height: AppSpacing.md),
           Text(
             message,

@@ -69,6 +69,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     if (!event.isEvent) return;
 
+    final payload = event.eventPayload;
+    final device = payload?.device;
+    if (payload != null && device != null && payload.deviceId.isNotEmpty) {
+      _devicesById[payload.deviceId] = device;
+    }
+    if (payload != null && device != null) {
+      if (device.id.isNotEmpty) {
+        _devicesById[device.id] = device;
+      }
+      if (device.deviceId.isNotEmpty) {
+        _devicesById[device.deviceId] = device;
+      }
+    }
+
     if (_realtimeRefreshTimer?.isActive ?? false) return;
     _realtimeRefreshTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
@@ -297,12 +311,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   String _csvRow(Event event) {
-    final device = _devicesById[event.deviceId];
+    final device = event.device ?? _devicesById[event.deviceId];
     final values = <String>[
       formatWibDateTime(event.triggeredAt ?? event.createdAt),
-      device?.deviceId ?? event.deviceId,
-      device?.displayName ?? '',
-      device?.locationLabel ?? '',
+      device?.deviceId ?? event.deviceCode,
+      device?.displayName ?? event.deviceName,
+      device?.locationLabel ?? event.deviceLocation,
       event.typeLabel,
       event.severity.label,
       event.status.label,
@@ -320,7 +334,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final groups = _groupedEvents();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -339,7 +352,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ? null
                           : _exportCsv,
                       style: TextButton.styleFrom(
-                        backgroundColor: AppColors.surface,
+                        backgroundColor: context.appSurface,
                         foregroundColor: AppColors.primary,
                         minimumSize: const Size(0, 36),
                         padding: const EdgeInsets.symmetric(
@@ -382,13 +395,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         '$_total kejadian · Semua node',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           fontSize: 9,
-                          color: AppColors.textSecondary,
+                          color: context.appTextSecondary,
                         ),
                       ),
                       Text(
                         'Terbaru dahulu',
-                        style: Theme.of(context).textTheme.labelSmall
-                            ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontSize: 9,
+                          color: context.appTextMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -504,7 +519,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     showEventDetailSheet(
       context,
       event: event,
-      device: _devicesById[event.deviceId],
+      device: event.device ?? _devicesById[event.deviceId],
       onUpdated: _updateEvent,
     );
   }
@@ -557,12 +572,12 @@ class _EventGroup extends StatelessWidget {
             Text(
               _dayLabel(date),
               style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(fontSize: 9, color: AppColors.textSecondary),
+                  ?.copyWith(fontSize: 9, color: context.appTextSecondary),
             ),
             Text(
               '${formatWibDate(date)} · ${events.length} kejadian',
               style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(fontSize: 9, color: AppColors.textMuted),
+                  ?.copyWith(fontSize: 9, color: context.appTextMuted),
             ),
           ],
         ),
@@ -570,7 +585,7 @@ class _EventGroup extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
           child: Column(
@@ -579,7 +594,9 @@ class _EventGroup extends StatelessWidget {
                 if (index > 0) const Divider(height: 0.5, thickness: 0.5),
                 _EventRow(
                   event: events[index],
-                  device: deviceById[events[index].deviceId],
+                  device:
+                      events[index].device ??
+                      deviceById[events[index].deviceId],
                   onTap: () => onTap(events[index]),
                 ),
               ],
@@ -633,7 +650,7 @@ class _EventRow extends StatelessWidget {
               child: Text(
                 time,
                 style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 11, color: AppColors.textSecondary),
+                    ?.copyWith(fontSize: 11, color: context.appTextSecondary),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -645,12 +662,12 @@ class _EventRow extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          device?.deviceId ?? event.deviceId,
+                          device?.deviceId ?? event.deviceCode,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
+                                color: context.appTextPrimary,
                               ),
                         ),
                       ),
@@ -669,7 +686,7 @@ class _EventRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 11.5,
-                      color: AppColors.textPrimary,
+                      color: context.appTextPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -677,8 +694,10 @@ class _EventRow extends StatelessWidget {
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(fontSize: 9, color: AppColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 9,
+                      color: context.appTextSecondary,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   _StatusChip(status: event.status),
@@ -713,7 +732,7 @@ class _StatusChip extends StatelessWidget {
     final (background, foreground) = switch (status) {
       EventStatus.active => (AppColors.warningSoft, AppColors.warning),
       EventStatus.acknowledged => (AppColors.successSoft, AppColors.success),
-      EventStatus.resolved => (AppColors.background, AppColors.textSecondary),
+      EventStatus.resolved => (context.appBackground, context.appTextSecondary),
     };
 
     return Container(
@@ -739,25 +758,30 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
         0,
         AppSpacing.lg,
         AppSpacing.lg,
       ),
+      height: 44,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: context.appBorder),
+      ),
       child: Row(
         children: [
-          for (final filter in _HistoryFilter.values) ...[
-            if (filter != _HistoryFilter.values.first)
-              const SizedBox(width: AppSpacing.lg),
-            _FilterButton(
-              label: _label(filter),
-              selected: selected == filter,
-              onTap: () => onSelected(filter),
+          for (final filter in _HistoryFilter.values)
+            Expanded(
+              child: _FilterButton(
+                label: _label(filter),
+                selected: selected == filter,
+                onTap: () => onSelected(filter),
+              ),
             ),
-          ],
         ],
       ),
     );
@@ -792,30 +816,23 @@ class _FilterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: 6),
-        child: Column(
-          children: [
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 10.5,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? AppColors.primary : AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 5),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              width: selected ? 40 : 0,
-              height: 2,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-              ),
-            ),
-          ],
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 10.5,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? AppColors.primaryDark : context.appTextSecondary,
+          ),
         ),
       ),
     );
@@ -896,11 +913,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.cloud_off_rounded,
-            size: 44,
-            color: AppColors.textMuted,
-          ),
+          Icon(Icons.cloud_off_rounded, size: 44, color: context.appTextMuted),
           const SizedBox(height: AppSpacing.md),
           Text(
             message,
@@ -927,11 +940,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.history_rounded,
-            size: 44,
-            color: AppColors.textMuted,
-          ),
+          Icon(Icons.history_rounded, size: 44, color: context.appTextMuted),
           const SizedBox(height: AppSpacing.md),
           Text(
             filter == _HistoryFilter.all

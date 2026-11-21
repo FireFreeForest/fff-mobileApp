@@ -24,6 +24,8 @@ class Device {
     this.latitude,
     this.longitude,
     this.lastSeenAt,
+    this.onlineSince,
+    this.uptimeSeconds = 0,
     this.createdAt,
     this.updatedAt,
   });
@@ -37,6 +39,8 @@ class Device {
   final double? latitude;
   final double? longitude;
   final DateTime? lastSeenAt;
+  final DateTime? onlineSince;
+  final int uptimeSeconds;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -58,6 +62,8 @@ class Device {
       latitude: parseDouble(json['latitude']),
       longitude: parseDouble(json['longitude']),
       lastSeenAt: parseDateTime(json['last_seen_at']),
+      onlineSince: parseDateTime(json['online_since']),
+      uptimeSeconds: parseInt(json['uptime_seconds']) ?? 0,
       createdAt: parseDateTime(json['created_at']),
       updatedAt: parseDateTime(json['updated_at']),
     );

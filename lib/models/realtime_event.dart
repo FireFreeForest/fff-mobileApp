@@ -1,4 +1,5 @@
 import '../core/utils/json_utils.dart';
+import 'event.dart';
 
 class RealtimeTypes {
   const RealtimeTypes._();
@@ -9,6 +10,7 @@ class RealtimeTypes {
   static const telemetryFire = 'telemetry.fire';
   static const riskUpdated = 'risk.updated';
   static const eventCreated = 'event.created';
+  static const eventUpdated = 'event.updated';
   static const eventResolved = 'event.resolved';
   static const deviceStatus = 'device.status';
   static const commandIssued = 'command.issued';
@@ -34,6 +36,11 @@ class RealtimeEvent {
   bool get isCommand => type.startsWith('command.');
 
   Map<String, dynamic> get telemetry => parseMap(data['telemetry']);
+
+  Event? get eventPayload {
+    final raw = data['event'];
+    return raw is Map ? Event.fromJson(parseMap(raw)) : null;
+  }
 
   String? get commandId {
     final value = data['command_id']?.toString().trim();
